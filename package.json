@@ -1,0 +1,13 @@
+{
+  "name": "branchline",
+  "version": "1.0.0",
+  "description": "An in-browser Git practice space that draws your commit history as a transit map.",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/smoke.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.0"
+  },
+  "license": "MIT"
+}

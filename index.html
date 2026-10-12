@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branchline: learn Git by running it</title>
+<meta name="description" content="A free practice space for students. Type real Git commands and watch your commit history grow as a transit map.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDF1F7; --white:#fff; --ink:#16213A; --muted:#566178; --rule:#D3DAE6;
+    --teal:#1B998B; --blue:#2D6CDF;
+    --term:#0E1A33; --term-ink:#E6ECF8; --term-dim:#8C9AB8;
+    --ok:#5BD1A5; --err:#FF9A9A; --warn:#F3C969; --focus:#2D6CDF;
+    --sans:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--paper);color:var(--ink);font:400 1rem/1.5 var(--sans)}
+  a{color:var(--blue)}
+  code{font-family:var(--mono);font-size:.9em}
+  :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  .wrap{max-width:1280px;margin:0 auto;padding:20px clamp(14px,3vw,32px) 48px}
+  header{display:flex;gap:16px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;padding:12px 0 26px}
+  h1{font:700 clamp(2.2rem,4.6vw,3.4rem)/1 var(--sans);letter-spacing:-.025em;margin:0}
+  .tag{margin:.6rem 0 0;color:var(--muted);max-width:54ch;font-size:1.05rem}
+  .head-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+  .btn{font:600 .85rem var(--sans);padding:7px 12px;border-radius:8px;border:1.5px solid var(--ink);background:var(--white);color:var(--ink);cursor:pointer;text-decoration:none;display:inline-block}
+  .btn:hover{background:var(--ink);color:var(--white)}
+  .btn.small{padding:4px 9px;font-size:.78rem}
+
+  .layout{display:grid;grid-template-columns:minmax(260px,330px) 1fr;gap:32px;align-items:start}
+  @media (max-width:960px){.layout{grid-template-columns:1fr}}
+
+  /* Missions drawn as a transit line */
+  .missions h2{font:600 1.15rem var(--sans);margin:0 0 14px}
+  ol.track{list-style:none;margin:0;padding:0}
+  ol.track li{position:relative;padding:0 0 20px 46px}
+  ol.track li::before{content:'';position:absolute;left:13px;top:26px;bottom:-4px;width:4px;background:var(--rule)}
+  ol.track li:last-child::before{display:none}
+  ol.track li.done::before{background:var(--teal)}
+  .stop{position:absolute;left:4px;top:1px;width:22px;height:22px;border-radius:50%;background:var(--white);border:4px solid var(--rule);display:grid;place-items:center;color:#fff;font-size:.7rem;font-weight:700}
+  li.done .stop{background:var(--teal);border-color:var(--teal)}
+  li.done .stop::after{content:'✓'}
+  li.current .stop{border-color:var(--blue)}
+  ol.track h3{font:600 1.02rem/1.3 var(--sans);margin:0;padding-top:1px}
+  li.todo h3{color:var(--muted);font-weight:500}
+  li.done h3{color:var(--muted)}
+  .mission-body{margin-top:10px;background:var(--white);border:1.5px solid var(--blue);border-radius:12px;padding:12px 14px}
+  .mission-body p{margin:0 0 10px}
+  .cmds{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:6px}
+  ol.track .cmds li{padding:0;position:static}
+  ol.track .cmds li::before{display:none}
+  .cmds li{display:flex;gap:8px;align-items:center;justify-content:space-between;background:#F3F6FB;border-radius:8px;padding:5px 6px 5px 10px}
+  .cmds code{overflow-wrap:anywhere}
+  .hint{margin:8px 0 0;color:var(--muted);font-size:.92rem}
+  .finish{background:var(--white);border:1.5px solid var(--teal);border-radius:12px;padding:14px 16px;margin-top:6px}
+  .finish h3{margin:0 0 6px;font:700 1.1rem var(--sans)}
+  .finish p{margin:0 0 8px}
+  .finish ul{margin:0;padding-left:1.1rem}
+
+  /* Map */
+  .map-card{background:var(--white);border:1px solid var(--rule);border-radius:14px;padding:14px 16px 12px}
+  .map-card .row{display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap;margin-bottom:6px}
+  .map-card h2{font:600 1.15rem var(--sans);margin:0}
+  .legend{color:var(--muted);font-size:.86rem;margin:0}
+  #map{overflow-x:auto;min-height:150px}
+  #map svg{display:block}
+  #map .empty{color:var(--muted);margin:38px 4px;max-width:60ch}
+  .msg{font:500 11px var(--sans);fill:var(--ink)}
+  .lbl{font:600 11px var(--mono)}
+  .fresh circle{transform-box:fill-box;transform-origin:center;animation:pop .35s ease-out}
+  @keyframes pop{from{transform:scale(.2);opacity:0}to{transform:scale(1);opacity:1}}
+
+  /* Terminal + areas */
+  .bench{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:20px;margin-top:20px;align-items:start}
+  @media (max-width:1100px){.bench{grid-template-columns:1fr}}
+  .term{background:var(--term);color:var(--term-ink);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;height:min(560px,70vh);min-height:340px}
+  .term-bar{padding:10px 16px;font:600 .8rem var(--mono);color:var(--term-dim);border-bottom:1px solid rgba(255,255,255,.1)}
+  #term-out{padding:12px 16px 6px;overflow-y:auto;flex:1;font:400 .86rem/1.5 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;cursor:text}
+  .ln{min-height:1.5em}
+  .ln.err{color:var(--err)} .ln.ok{color:var(--ok)} .ln.dim{color:var(--term-dim)} .ln.warn{color:var(--warn)}
+  .ln.win{color:#fff;background:rgba(91,209,165,.2);padding:2px 10px;border-radius:6px;display:inline-block;margin:6px 0}
+  .ln .prompt{color:var(--term-dim)}
+  .in{display:flex;gap:8px;align-items:center;padding:10px 16px 14px;border-top:1px solid rgba(255,255,255,.1);font:400 .86rem var(--mono)}
+  .in:focus-within{box-shadow:inset 0 0 0 2px var(--focus)}
+  .in .prompt{color:var(--term-dim);white-space:nowrap}
+  .in input{flex:1;min-width:0;background:transparent;border:0;color:var(--term-ink);font:inherit;outline:none}
+
+  .areas{background:var(--white);border:1px solid var(--rule);border-radius:14px;padding:6px 16px 10px}
+  .areas section{padding:10px 0;border-top:1px solid var(--rule)}
+  .areas section:first-child{border-top:0}
+  .areas h3{font:600 .98rem var(--sans);margin:0}
+  .areas .cap{margin:0 0 6px;color:var(--muted);font-size:.84rem}
+  .areas ul{list-style:none;margin:0;padding:0}
+  .areas li{display:flex;justify-content:space-between;gap:8px;font:400 .85rem var(--mono);padding:3px 0}
+  .areas li.none{color:var(--muted);font-family:var(--sans);font-size:.88rem}
+  .b{font:600 .72rem var(--sans);padding:1px 9px;border-radius:99px;background:#E7ECF5;color:var(--ink);white-space:nowrap}
+  .b.new{background:#DDF3EF;color:#0B5F56} .b.mod{background:#FFF1CC;color:#7A5600}
+  .b.del{background:#FFE0E0;color:#8A1F1F} .b.conf{background:#EBD9FB;color:#5A2A8C}
+
+  footer{margin-top:34px;color:var(--muted);font-size:.88rem;max-width:80ch}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.fresh circle{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Branchline</h1>
+      <p class="tag">Practice real Git commands in your browser. Every commit becomes a station on your own transit map.</p>
+    </div>
+    <div class="head-actions">
+      <button class="btn" id="reset" type="button">Start over</button>
+      <a class="btn" href="https://github.com/YOUR-USERNAME/branchline">View source on GitHub</a>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="missions" aria-labelledby="m-title">
+      <h2 id="m-title">Missions</h2>
+      <ol class="track" id="track"></ol>
+      <div id="finish"></div>
+    </aside>
+
+    <main>
+      <section class="map-card" aria-labelledby="map-title">
+        <div class="row">
+          <h2 id="map-title">Your commit map</h2>
+          <p class="legend">Each station is a commit. Filled stations are merges. The dark tag shows where HEAD is.</p>
+        </div>
+        <div id="map"></div>
+      </section>
+
+      <div class="bench">
+        <section class="term" aria-label="Practice terminal">
+          <div class="term-bar">practice terminal</div>
+          <div id="term-out" role="log" aria-live="polite"></div>
+          <div class="in">
+            <span class="prompt" id="prompt" aria-hidden="true">my-project $</span>
+            <label class="sr" for="cmd">Type a command and press Enter</label>
+            <input id="cmd" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Type a command">
+          </div>
+        </section>
+
+        <section class="areas" aria-label="Where your files are">
+          <section>
+            <h3>Working folder</h3>
+            <p class="cap">Files you can edit right now.</p>
+            <ul id="area-work"></ul>
+          </section>
+          <section>
+            <h3>Staging area</h3>
+            <p class="cap">Changes picked for the next commit.</p>
+            <ul id="area-stage"></ul>
+          </section>
+          <section>
+            <h3 id="saved-title">Saved snapshot</h3>
+            <p class="cap">What the latest commit contains.</p>
+            <ul id="area-saved"></ul>
+          </section>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <footer>
+    <p>Branchline is a teaching simulator that supports a practical subset of Git. Nothing here touches your computer or a real repository. To use the real thing, install Git from <a href="https://git-scm.com/downloads">git-scm.com</a>. MIT licensed.</p>
+  </footer>
+  <noscript><p>Branchline needs JavaScript to run the practice terminal.</p></noscript>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- tiny helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clone = o => Object.assign({}, o);
+const LANE_COLORS = ['#1B998B','#2D6CDF','#9B51E0','#E8A200','#E5484D','#3F9142'];
+
+/* ---------- state ---------- */
+let S, seq, done, prevCount;
+function fresh(){
+  return {
+    repo:false, files:{}, index:{}, commits:{}, order:[], branches:{}, head:'main', lanes:[],
+    remote:null, upstream:{}, remoteBranches:{}, merging:null, conflicts:[],
+    flags:{conflictSeen:false, conflictResolved:false}
+  };
+}
+const headId = () => S.branches[S.head];
+const headTree = () => { const id = headId(); return id ? S.commits[id].tree : {}; };
+function ensureLane(name){ let i = S.lanes.indexOf(name); if (i < 0){ S.lanes.push(name); i = S.lanes.length - 1; } return i; }
+function ancestors(id){
+  const seen = new Set(), st = [id];
+  while (st.length){ const x = st.pop(); if (!x || seen.has(x)) continue; seen.add(x); S.commits[x].parents.forEach(p => st.push(p)); }
+  return seen;
+}
+function hash(str){ let h = 2166136261 >>> 0; for (let i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h; }
+function newId(seed){
+  let id, n = 0;
+  do { const a = hash(seed + 'a' + seq + n), b = hash(seed + 'b' + (seq * 7 + 3) + n); id = (a.toString(16).padStart(8,'0') + b.toString(16).padStart(8,'0')).slice(0,7); n++; }
+  while (S.commits[id]);
+  return id;
+}
+function makeCommit(msg, parents){
+  seq++;
+  const id = newId(msg + JSON.stringify(S.index) + parents.join(','));
+  S.commits[id] = { id, msg, parents, tree: clone(S.index), branch: S.head, seq };
+  S.order.push(id);
+  ensureLane(S.head);
+  S.branches[S.head] = id;
+  return id;
+}
+
+/* ---------- terminal output ---------- */
+const termEl = $('#term-out');
+function out(text, cls = ''){
+  String(text).split('\n').forEach(line => {
+    const d = document.createElement('div');
+    d.className = 'ln ' + cls;
+    d.textContent = line === '' ? '\u00A0' : line;
+    termEl.appendChild(d);
+  });
+}
+const promptText = () => 'my-project' + (S.repo ? ' (' + S.head + ')' : '') + ' $';
+function echoPrompt(raw){
+  const d = document.createElement('div'); d.className = 'ln cmd';
+  const p = document.createElement('span'); p.className = 'prompt'; p.textContent = promptText() + ' ';
+  const t = document.createElement('span'); t.textContent = raw;
+  d.appendChild(p); d.appendChild(t); termEl.appendChild(d);
+}
+function welcome(){
+  out('Welcome to Branchline. This is a practice folder, so nothing you type can break a real project.', 'dim');
+  out('Follow the missions on the left, or type help to see what works here.', 'dim');
+  out('');
+}
+
+/* ---------- tokenizer ---------- */
+function tokenize(s){
+  s = s.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'");
+  const t = []; let cur = '', has = false, q = null;
+  const push = () => { if (has){ t.push({v:cur, op:false}); cur = ''; has = false; } };
+  for (let i = 0; i < s.length; i++){
+    const c = s[i];
+    if (q){ if (c === q) q = null; else cur += c; continue; }
+    if (c === '"' || c === "'"){ q = c; has = true; continue; }
+    if (/\s/.test(c)){ push(); continue; }
+    if (c === '>'){ push(); if (s[i+1] === '>'){ t.push({v:'>>', op:true}); i++; } else t.push({v:'>', op:true}); continue; }
+    cur += c; has = true;
+  }
+  if (q) return null;
+  push(); return t;
+}
+
+/* ---------- status ---------- */
+function statusInfo(){
+  const H = headTree(), I = S.index, W = S.files, conf = new Set(S.conflicts);
+  const staged = [], unstaged = [], untracked = [];
+  [...new Set([...Object.keys(H), ...Object.keys(I)])].sort().forEach(f => {
+    if (conf.has(f)) return;
+    if (!(f in H) && (f in I)) staged.push({f, kind:'new file'});
+    else if ((f in H) && !(f in I)) staged.push({f, kind:'deleted'});
+    else if (H[f] !== I[f]) staged.push({f, kind:'modified'});
+    if (f in I){
+      if (!(f in W)) unstaged.push({f, kind:'deleted'});
+      else if (W[f] !== I[f]) unstaged.push({f, kind:'modified'});
+    }
+  });
+  Object.keys(W).sort().forEach(f => { if (!(f in I)) untracked.push(f); });
+  return {staged, unstaged, untracked};
+}
+
+/* ---------- shell commands ---------- */
+function dispatch(t){
+  if (t === null){ out('Unclosed quote. Add the closing quote and try again.', 'err'); return; }
+  const cmd = t[0].v, args = t.slice(1);
+  switch (cmd){
+    case 'git': return git(args);
+    case 'echo': return shEcho(args);
+    case 'cat': {
+      const f = args[0] && args[0].v;
+      if (!f){ out('usage: cat <file>', 'err'); return; }
+      if (!(f in S.files)){ out('cat: ' + f + ': No such file or directory', 'err'); return; }
+      if (S.files[f] !== '') out(S.files[f]);
+      return;
+    }
+    case 'ls': { Object.keys(S.files).sort().forEach(f => out(f)); return; }
+    case 'touch': {
+      if (!args.length){ out('usage: touch <file>', 'err'); return; }
+      args.forEach(a => { if (!(a.v in S.files)) S.files[a.v] = ''; }); return;
+    }
+    case 'rm': {
+      const f = args[0] && args[0].v;
+      if (!f){ out('usage: rm <file>', 'err'); return; }
+      if (!(f in S.files)){ out('rm: ' + f + ': No such file or directory', 'err'); return; }
+      delete S.files[f]; return;
+    }
+    case 'pwd': out('/home/you/my-project'); return;
+    case 'clear': termEl.innerHTML = ''; return;
+    case 'help': return help();
+    default: out('command not found: ' + cmd + '. Type help to see what works here.', 'err');
+  }
+}
+function shEcho(args){
+  const i = args.findIndex(a => a.op);
+  let words = args, target = null, mode = null;
+  if (i >= 0){
+    words = args.slice(0, i); mode = args[i].v; target = args[i+1];
+    if (!target || target.op){ out('Missing a file name after ' + mode, 'err'); return; }
+  }
+  const text = words.map(w => w.v).join(' ');
+  if (!target){ out(text); return; }
+  const f = target.v;
+  if (/[\/\\]/.test(f)){ out('This practice folder is flat. Use a file name without slashes.', 'err'); return; }
+  if (mode === '>') S.files[f] = text;
+  else S.files[f] = (f in S.files && S.files[f] !== '') ? S.files[f] + '\n' + text : text;
+}
+function help(){
+  out('Shell:  ls   cat <file>   echo "text" > <file>   echo "more" >> <file>   touch <file>   rm <file>   clear');
+  out('Git:    git init | status | add | commit -m | log --oneline | diff | restore | rm');
+  out('        git branch | switch -c | checkout | merge | remote add | push -u');
+  out('Tip: use the "Type it" buttons in the missions, then press Enter. Arrow up repeats earlier commands.', 'dim');
+}
+
+/* ---------- git ---------- */
+function git(a){
+  const sub = a[0] && a[0].v, args = a.slice(1).map(x => x.v);
+  if (!sub){ out('usage: git <command> [<args>]\nTry: git init, git status, git add, git commit, git log, git branch, git switch, git merge, git remote, git push'); return; }
+  if (sub === '--version' || sub === 'version'){ out('git version 2.x (Branchline practice simulator)'); return; }
+  if (sub === 'help'){ help(); return; }
+  if (sub === 'init') return gInit();
+  if (sub === 'config') return;
+  if (!S.repo){ out('fatal: not a git repository. Run git init first.', 'err'); return; }
+  switch (sub){
+    case 'status': return gStatus();
+    case 'add': return gAdd(args);
+    case 'commit': return gCommit(args);
+    case 'log': return gLog(args);
+    case 'diff': return gDiff(args);
+    case 'branch': return gBranch(args);
+    case 'switch': return gSwitch(args, false);
+    case 'checkout': return gSwitch(args, true);
+    case 'merge': return gMerge(args);
+    case 'remote': return gRemote(args);
+    case 'push': return gPush(args);
+    case 'pull': case 'fetch':
+      if (!S.remote){ out('fatal: no remote configured. Add one with git remote add origin <url>', 'err'); return; }
+      out('Already up to date.'); return;
+    case 'restore': return gRestore(args);
+    case 'rm': return gRm(args);
+    default: out("git: '" + sub + "' is not supported in this simulator. Type help to see what is.", 'err');
+  }
+}
+function gInit(){
+  if (S.repo){ out('Reinitialized existing Git repository in /home/you/my-project/.git/'); return; }
+  S.repo = true; S.head = 'main'; S.index = {};
+  out('Initialized empty Git repository in /home/you/my-project/.git/');
+}
+function gStatus(){
+  const si = statusInfo(), cur = headId();
+  out('On branch ' + S.head);
+  if (S.merging && S.conflicts.length) out('You have unmerged paths.\n  (fix the conflicts, run git add on each file, then git commit)', 'warn');
+  else if (S.merging) out('All conflicts are fixed but you are still merging.\n  (use "git commit" to conclude the merge)', 'ok');
+  if (!cur) out('\nNo commits yet');
+  if (S.conflicts.length){
+    out('\nUnmerged paths:\n  (use "git add <file>..." to mark resolution)');
+    S.conflicts.forEach(f => out('\tboth modified:   ' + f, 'err'));
+  }
+  if (si.staged.length){
+    out('\nChanges to be committed:\n  (use "git restore --staged <file>..." to unstage)');
+    si.staged.forEach(x => out('\t' + (x.kind + ':').padEnd(12) + x.f, 'ok'));
+  }
+  if (si.unstaged.length){
+    out('\nChanges not staged for commit:\n  (use "git add <file>..." to update what will be committed)\n  (use "git restore <file>..." to discard changes in working directory)');
+    si.unstaged.forEach(x => out('\t' + (x.kind + ':').padEnd(12) + x.f, 'err'));
+  }
+  if (si.untracked.length){
+    out('\nUntracked files:\n  (use "git add <file>..." to include in what will be committed)');
+    si.untracked.forEach(f => out('\t' + f, 'err'));
+  }
+  out('');
+  const any = si.staged.length || si.unstaged.length || si.untracked.length || S.conflicts.length;
+  if (!any) out(cur ? 'nothing to commit, working tree clean' : 'nothing to commit (create files and use "git add" to track them)');
+  else if (!si.staged.length && !S.conflicts.length){
+    out(si.unstaged.length ? 'no changes added to commit (use "git add" and/or "git commit -a")' : 'nothing added to commit but untracked files present (use "git add" to track)');
+  }
+}
+function resolveConflict(f){ const i = S.conflicts.indexOf(f); if (i >= 0) S.conflicts.splice(i, 1); }
+function gAdd(args){
+  if (!args.length){ out("Nothing specified, nothing added.\nhint: Maybe you wanted to say 'git add .'?"); return; }
+  const I = S.index, W = S.files;
+  for (const p of args){
+    if (p === '.' || p === '-A' || p === '--all'){
+      Object.keys(W).forEach(f => { I[f] = W[f]; resolveConflict(f); });
+      Object.keys(I).forEach(f => { if (!(f in W)) delete I[f]; });
+    } else if (p.startsWith('-')){
+      out('error: unknown option ' + p, 'err'); return;
+    } else if (p in W){
+      I[p] = W[p];
+      if (S.conflicts.includes(p)){
+        resolveConflict(p);
+        if (/^<{7} /m.test(W[p])) out('hint: ' + p + ' still contains conflict markers (<<<<<<<). Edit them out before committing.', 'warn');
+      }
+    } else if (p in I){
+      delete I[p]; resolveConflict(p);
+    } else { out("fatal: pathspec '" + p + "' did not match any files", 'err'); return; }
+  }
+}
+function gCommit(args){
+  let msg = null, auto = false;
+  for (let i = 0; i < args.length; i++){
+    const a = args[i];
+    if (a === '-m' || a === '--message') msg = args[++i];
+    else if (a === '-am' || a === '-ma'){ auto = true; msg = args[++i]; }
+    else if (a === '-a' || a === '--all') auto = true;
+    else if (a.startsWith('--message=')) msg = a.slice(10);
+    else if (a.startsWith('-m') && a.length > 2) msg = a.slice(2);
+    else { out('error: unknown option or argument: ' + a, 'err'); return; }
+  }
+  if (auto){
+    Object.keys(S.index).forEach(f => {
+      if (S.conflicts.includes(f)) return;
+      if (f in S.files) S.index[f] = S.files[f]; else delete S.index[f];
+    });
+  }
+  if (S.merging){
+    if (S.conflicts.length){
+      out('error: Committing is not possible because you have unmerged files.\nhint: Fix them in your files, then run git add on each one to mark it resolved.', 'err'); return;
+    }
+  } else {
+    const si = statusInfo();
+    if (!si.staged.length){
+      if (si.unstaged.length) out('no changes added to commit. Stage them with git add, or use git commit -am "message".', 'err');
+      else if (si.untracked.length) out('nothing added to commit, but there are untracked files. Stage them with git add <file>.', 'err');
+      else out('nothing to commit, working tree clean', 'err');
+      return;
+    }
+  }
+  if (!msg){
+    if (S.merging) msg = "Merge branch '" + S.merging.branch + "'";
+    else { out('Aborting commit due to empty commit message. Add one like this: git commit -m "Describe your change"', 'err'); return; }
+  }
+  const n = statusInfo().staged.length, root = !headId();
+  const parents = headId() ? [headId()] : [];
+  if (S.merging) parents.push(S.merging.sha);
+  const hadConflict = S.merging && S.merging.hadConflict;
+  const id = makeCommit(msg, parents);
+  if (S.merging){ if (hadConflict) S.flags.conflictResolved = true; S.merging = null; }
+  out('[' + S.head + (root ? ' (root-commit)' : '') + ' ' + id + '] ' + msg);
+  if (n) out(' ' + n + ' file' + (n === 1 ? '' : 's') + ' changed');
+}
+function decorations(id){
+  const d = [];
+  Object.keys(S.branches).forEach(b => { if (S.branches[b] === id) d.push(b === S.head ? 'HEAD -> ' + b : b); });
+  if (S.remote) Object.keys(S.remoteBranches).forEach(b => { if (S.remoteBranches[b] === id) d.push(S.remote.name + '/' + b); });
+  d.sort((x, y) => (y.startsWith('HEAD') ? 1 : 0) - (x.startsWith('HEAD') ? 1 : 0));
+  return d.length ? ' (' + d.join(', ') + ')' : '';
+}
+function gLog(args){
+  const tip = headId();
+  if (!tip){ out("fatal: your current branch '" + S.head + "' does not have any commits yet", 'err'); return; }
+  const one = args.includes('--oneline');
+  [...ancestors(tip)].sort((a, b) => S.commits[b].seq - S.commits[a].seq).forEach(id => {
+    const c = S.commits[id];
+    if (one) out(id + decorations(id) + ' ' + c.msg);
+    else { out('commit ' + id + decorations(id), 'warn'); out('Author: You <you@example.com>\n\n    ' + c.msg + '\n'); }
+  });
+}
+function lineDiff(a, b){
+  const A = a ? a.split('\n') : [], B = b ? b.split('\n') : [], n = A.length, m = B.length;
+  const dp = Array.from({length:n + 1}, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = A[i] === B[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
+  const res = []; let i = 0, j = 0;
+  while (i < n && j < m){
+    if (A[i] === B[j]){ res.push([' ', A[i]]); i++; j++; }
+    else if (dp[i+1][j] >= dp[i][j+1]) res.push(['-', A[i++]]); else res.push(['+', B[j++]]);
+  }
+  while (i < n) res.push(['-', A[i++]]); while (j < m) res.push(['+', B[j++]]);
+  return res;
+}
+function gDiff(args){
+  const staged = args.includes('--staged') || args.includes('--cached');
+  const from = staged ? headTree() : S.index, to = staged ? S.index : S.files;
+  let any = false;
+  [...new Set([...Object.keys(from), ...(staged ? Object.keys(to) : [])])].sort().forEach(f => {
+    if (!staged && !(f in from)) return;
+    if (S.conflicts.includes(f)) return;
+    if (from[f] === to[f]) return;
+    any = true;
+    out('diff --git a/' + f + ' b/' + f, 'warn');
+    out('--- ' + (f in from ? 'a/' + f : '/dev/null') + '\n+++ ' + (f in to ? 'b/' + f : '/dev/null'));
+    lineDiff(from[f], to[f]).forEach(([k, line]) => out(k + line, k === '+' ? 'ok' : k === '-' ? 'err' : ''));
+  });
+  if (!any && !staged && statusInfo().untracked.length) out('Nothing to compare yet. New files are untracked until you run git add.', 'dim');
+}
+function gBranch(args){
+  if (args[0] === '-d' || args[0] === '-D' || args[0] === '--delete'){
+    const n = args[1];
+    if (!n){ out('fatal: branch name required', 'err'); return; }
+    if (!(n in S.branches)){ out("error: branch '" + n + "' not found.", 'err'); return; }
+    if (n === S.head){ out("error: cannot delete branch '" + n + "' while you are on it. Switch to another branch first.", 'err'); return; }
+    if (!ancestors(headId()).has(S.branches[n]) && args[0] !== '-D'){
+      out("error: the branch '" + n + "' is not fully merged.\nIf you are sure you want to delete it, run: git branch -D " + n, 'err'); return;
+    }
+    const id = S.branches[n]; delete S.branches[n]; out('Deleted branch ' + n + ' (was ' + id + ').'); return;
+  }
+  const name = args.find(x => !x.startsWith('-'));
+  if (!name){ Object.keys(S.branches).sort().forEach(b => out((b === S.head ? '* ' : '  ') + b, b === S.head ? 'ok' : '')); return; }
+  if (!headId()){ out("fatal: not a valid object name: '" + S.head + "'. Make a commit first.", 'err'); return; }
+  if (!/^[\w.\-\/]+$/.test(name)){ out("fatal: '" + name + "' is not a valid branch name", 'err'); return; }
+  if (name in S.branches){ out("fatal: a branch named '" + name + "' already exists", 'err'); return; }
+  S.branches[name] = headId();
+}
+function applyTree(T, verb){
+  const H = headTree(), I = S.index, W = S.files;
+  const tracked = new Set([...Object.keys(H), ...Object.keys(I)]);
+  const dirty = f => I[f] !== H[f] || ((f in I) && W[f] !== I[f]);
+  const blockers = [], collide = [];
+  tracked.forEach(f => { if (dirty(f) && H[f] !== T[f]) blockers.push(f); });
+  Object.keys(T).forEach(f => { if (!tracked.has(f) && (f in W) && W[f] !== T[f]) collide.push(f); });
+  if (blockers.length){
+    out('error: Your local changes to these files would be overwritten by ' + verb + ':\n\t' + blockers.join('\n\t') + '\nCommit your changes first (git commit -am "message").', 'err'); return false;
+  }
+  if (collide.length){
+    out('error: Untracked files would be overwritten by ' + verb + ':\n\t' + collide.join('\n\t') + '\nMove or remove them first.', 'err'); return false;
+  }
+  const nI = {}, nW = clone(W);
+  new Set([...tracked, ...Object.keys(T)]).forEach(f => {
+    if (tracked.has(f) && dirty(f)){ if (f in I) nI[f] = I[f]; return; }
+    if (f in T){ nI[f] = T[f]; nW[f] = T[f]; } else delete nW[f];
+  });
+  S.index = nI; S.files = nW; return true;
+}
+function gSwitch(args, isCheckout){
+  const create = args.includes('-c') || args.includes('-b');
+  const name = args.find(x => !x.startsWith('-'));
+  if (!name){ out('usage: git ' + (isCheckout ? 'checkout' : 'switch') + ' [-c] <branch>', 'err'); return; }
+  if (S.merging){ out('fatal: you are in the middle of a merge. Finish it with git commit first.', 'err'); return; }
+  if (create){
+    if (name in S.branches || (!headId() && name === S.head)){ out("fatal: a branch named '" + name + "' already exists", 'err'); return; }
+    if (!/^[\w.\-\/]+$/.test(name)){ out("fatal: '" + name + "' is not a valid branch name", 'err'); return; }
+    if (headId()) S.branches[name] = headId();
+    S.head = name; out("Switched to a new branch '" + name + "'"); return;
+  }
+  if (!(name in S.branches)){
+    out(isCheckout ? "error: pathspec '" + name + "' did not match any file(s) known to git" : "fatal: invalid reference: " + name, 'err'); return;
+  }
+  if (name === S.head){ out("Already on '" + name + "'"); return; }
+  if (!applyTree(S.commits[S.branches[name]].tree, 'checkout')) return;
+  S.head = name; out("Switched to branch '" + name + "'");
+}
+function merge3(b, o, t, theirs){
+  if (o === t) return {text:o, conflict:false};
+  if (o === b) return {text:t, conflict:false};
+  if (t === b) return {text:o, conflict:false};
+  const mark = (os, ts) => ['<<<<<<< HEAD', ...os, '=======', ...ts, '>>>>>>> ' + theirs];
+  if (o === undefined || t === undefined)
+    return {text: mark(o === undefined ? [] : o.split('\n'), t === undefined ? [] : t.split('\n')).join('\n'), conflict:true};
+  const B = b ? b.split('\n') : [], O = o ? o.split('\n') : [], T = t ? t.split('\n') : [];
+  if (O.length < B.length || T.length < B.length) return {text: mark(O, T).join('\n'), conflict:true};
+  const res = []; let conflict = false;
+  for (let i = 0; i < B.length; i++){
+    const bl = B[i], ol = O[i], tl = T[i];
+    if (ol === tl) res.push(ol); else if (ol === bl) res.push(tl); else if (tl === bl) res.push(ol);
+    else { res.push(...mark([ol], [tl])); conflict = true; }
+  }
+  const ot = O.slice(B.length), tt = T.slice(B.length);
+  if (ot.join('\n') === tt.join('\n')) res.push(...ot);
+  else if (!ot.length) res.push(...tt);
+  else if (!tt.length) res.push(...ot);
+  else { res.push(...mark(ot, tt)); conflict = true; }
+  return {text: res.join('\n'), conflict};
+}
+function summarize(a, b){
+  const names = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort().filter(f => a[f] !== b[f]);
+  names.forEach(f => out(' ' + f + (f in a ? (f in b ? ' (changed)' : ' (removed)') : ' (new)')));
+  if (names.length) out(' ' + names.length + ' file' + (names.length === 1 ? '' : 's') + ' changed');
+}
+function gMerge(args){
+  if (args.includes('--abort')){
+    if (!S.merging){ out('fatal: There is no merge to abort.', 'err'); return; }
+    const H = headTree(), W = {};
+    Object.keys(S.files).forEach(f => { if (!(f in S.index)) W[f] = S.files[f]; });
+    S.files = Object.assign(W, H); S.index = clone(H); S.merging = null; S.conflicts = [];
+    out('Merge abandoned. Your files are back to the last commit.'); return;
+  }
+  const name = args.find(x => !x.startsWith('-'));
+  if (!name){ out('usage: git merge <branch>', 'err'); return; }
+  if (S.merging){ out('fatal: You have not concluded your merge. Finish it with git commit, or cancel with git merge --abort.', 'err'); return; }
+  const target = S.branches[name], cur = headId();
+  if (!target){ out('merge: ' + name + ' - not something we can merge', 'err'); return; }
+  if (!cur){ out('fatal: nothing to merge into yet. Make a commit first.', 'err'); return; }
+  const si = statusInfo();
+  if (si.staged.length || si.unstaged.length){ out('error: You have uncommitted changes. Commit them first (git commit -am "message"), then merge.', 'err'); return; }
+  if (name === S.head){ out('Already up to date.'); return; }
+  const ancCur = ancestors(cur), ancT = ancestors(target);
+  if (ancCur.has(target)){ out('Already up to date.'); return; }
+  const T = S.commits[target].tree, O = S.commits[cur].tree;
+  if (ancT.has(cur)){
+    if (!applyTree(T, 'merge')) return;
+    S.branches[S.head] = target;
+    out('Updating ' + cur + '..' + target + '\nFast-forward'); summarize(O, T); return;
+  }
+  const baseId = [...ancCur].filter(x => ancT.has(x)).sort((x, y) => S.commits[y].seq - S.commits[x].seq)[0];
+  const B = S.commits[baseId].tree;
+  const nI = {}, nW = {}, conflicts = [];
+  Object.keys(S.files).forEach(f => { if (!(f in S.index)) nW[f] = S.files[f]; });
+  [...new Set([...Object.keys(B), ...Object.keys(O), ...Object.keys(T)])].sort().forEach(f => {
+    if (O[f] !== B[f] && T[f] !== B[f] && O[f] !== T[f]) out('Auto-merging ' + f);
+    const r = merge3(B[f], O[f], T[f], name);
+    if (r.conflict){
+      conflicts.push(f); nW[f] = r.text;
+      if (O[f] !== undefined) nI[f] = O[f];
+      out('CONFLICT (content): Merge conflict in ' + f, 'err');
+    } else if (r.text !== undefined){ nI[f] = r.text; nW[f] = r.text; }
+  });
+  S.index = nI; S.files = nW;
+  if (conflicts.length){
+    S.conflicts = conflicts; S.merging = {branch:name, sha:target, hadConflict:true}; S.flags.conflictSeen = true;
+    out('Automatic merge failed; fix conflicts and then commit the result.', 'warn');
+    out('Open the conflicted file with cat, fix it, then git add it and git commit.', 'dim');
+    return;
+  }
+  const id = makeCommit("Merge branch '" + name + "'", [cur, target]);
+  out("Merge made by the 'ort' strategy. [" + id + ']'); summarize(O, S.commits[id].tree);
+}
+function gRemote(args){
+  const sub = args[0];
+  if (sub === 'add'){
+    if (!args[1] || !args[2]){ out('usage: git remote add <name> <url>', 'err'); return; }
+    if (S.remote){ out('error: remote ' + S.remote.name + ' already exists.', 'err'); return; }
+    S.remote = {name:args[1], url:args[2]}; return;
+  }
+  if (sub === '-v'){ if (S.remote){ out(S.remote.name + '\t' + S.remote.url + ' (fetch)'); out(S.remote.name + '\t' + S.remote.url + ' (push)'); } return; }
+  if (!sub){ if (S.remote) out(S.remote.name); return; }
+  out('error: only "git remote add", "git remote -v" and "git remote" are supported here.', 'err');
+}
+function gPush(args){
+  const flags = args.filter(x => x.startsWith('-')), pos = args.filter(x => !x.startsWith('-'));
+  const setUp = flags.includes('-u') || flags.includes('--set-upstream');
+  if (!S.remote){
+    out('fatal: No configured push destination.\nAdd a GitHub remote first:\n\n    git remote add origin <url>\n', 'err'); return;
+  }
+  if (pos[0] && pos[0] !== S.remote.name){ out("fatal: '" + pos[0] + "' does not appear to be a git repository", 'err'); return; }
+  const branch = pos[1] || S.head;
+  if (!pos.length && !setUp && !S.upstream[branch]){
+    out('fatal: The current branch ' + branch + ' has no upstream branch.\nTo push it and set the remote as upstream, use:\n\n    git push -u ' + S.remote.name + ' ' + branch + '\n', 'err'); return;
+  }
+  const tip = S.branches[branch];
+  if (!tip){ out('error: src refspec ' + branch + ' does not match any. Make a commit first.', 'err'); return; }
+  const old = S.remoteBranches[branch];
+  if (old === tip){ out('Everything up-to-date'); return; }
+  out('To ' + S.remote.url);
+  out(old ? '   ' + old + '..' + tip + '  ' + branch + ' -> ' + branch : ' * [new branch]      ' + branch + ' -> ' + branch);
+  S.remoteBranches[branch] = tip;
+  if (setUp){ S.upstream[branch] = true; out("branch '" + branch + "' set up to track '" + S.remote.name + '/' + branch + "'."); }
+}
+function gRestore(args){
+  const staged = args.includes('--staged'), files = args.filter(x => !x.startsWith('-'));
+  if (!files.length){ out('fatal: you must specify a file to restore', 'err'); return; }
+  const H = headTree();
+  for (const f of files){
+    if (staged){
+      if (!(f in S.index) && !(f in H)){ out("error: pathspec '" + f + "' did not match any file(s) known to git", 'err'); return; }
+      if (f in H) S.index[f] = H[f]; else delete S.index[f];
+    } else {
+      if (!(f in S.index)){ out("error: pathspec '" + f + "' did not match any file(s) known to git", 'err'); return; }
+      S.files[f] = S.index[f];
+    }
+  }
+}
+function gRm(args){
+  const f = args.find(x => !x.startsWith('-'));
+  if (!f){ out('usage: git rm <file>', 'err'); return; }
+  if (!(f in S.index) && !(f in S.files)){ out("fatal: pathspec '" + f + "' did not match any files", 'err'); return; }
+  delete S.index[f]; delete S.files[f]; resolveConflict(f); out("rm '" + f + "'");
+}
+
+/* ---------- missions ---------- */
+const MISSIONS = [
+  { id:'init', title:'Create a repository',
+    body:'A repository is a folder that Git keeps a history of. Turn the practice folder into one.',
+    cmds:['git init'], hint:'Type git init and press Enter.', check:() => S.repo },
+  { id:'file', title:'Make a file',
+    body:'Write a one-line file. The > sign sends the text into a file instead of printing it. Then ask Git what it sees with git status.',
+    cmds:['echo "Hello, Git" > hello.txt', 'git status'], hint:'Git will list hello.txt as untracked. That means it exists but is not in the history yet.',
+    check:() => Object.keys(S.files).length > 0 },
+  { id:'stage', title:'Stage it',
+    body:'Staging means picking which changes go into the next snapshot.',
+    cmds:['git add hello.txt'], hint:'Run git status again. The file moves to "Changes to be committed". Also watch the staging area on the right.',
+    check:() => S.repo && Object.keys(S.index).length > 0 },
+  { id:'commit', title:'Take your first snapshot',
+    body:'A commit saves everything you staged, with a message that says what changed and why.',
+    cmds:['git commit -m "Add hello file"', 'git log --oneline'], hint:'Your first station appears on the commit map.',
+    check:() => S.order.length >= 1 },
+  { id:'branch', title:'Open a branch',
+    body:'A branch is a separate line of work. You can try ideas there without touching main.',
+    cmds:['git switch -c feature'], hint:'The prompt changes to show the branch you are on.',
+    check:() => S.head !== 'main' || Object.keys(S.branches).length > 1 },
+  { id:'branchcommit', title:'Commit on the branch',
+    body:'Change the file, then save the change as a commit while you are on the new branch.',
+    cmds:['echo "A second line" >> hello.txt', 'git commit -am "Add a second line"'], hint:'The -a in -am stages changes to files Git already tracks, so you can skip git add.',
+    check:() => S.order.some(id => S.commits[id].branch !== 'main') },
+  { id:'merge', title:'Merge it back',
+    body:'Go back to main and bring in the work from your branch.',
+    cmds:['git switch main', 'git merge feature'], hint:'Main had no new commits, so Git just moves it forward. That is called a fast-forward.',
+    check:() => { const m = S.branches.main; if (!m) return false; const anc = ancestors(m); return S.order.some(id => S.commits[id].branch !== 'main' && anc.has(id)); } },
+  { id:'conflict', title:'Fix a merge conflict',
+    body:'Conflicts happen when two branches change the same line. Create one on purpose, then resolve it. These steps assume your file is hello.txt.',
+    cmds:['git switch main','git switch -c edit-a','echo "Hello from A" > hello.txt','git commit -am "A says hello"','git switch main','git switch -c edit-b','echo "Hello from B" > hello.txt','git commit -am "B says hello"','git merge edit-a','cat hello.txt','echo "Hello from A and B" > hello.txt','git add hello.txt','git commit -m "Resolve hello conflict"'],
+    hint:'After git merge edit-a, Git stops and marks the file with <<<<<<<, =======, and >>>>>>>. Replace the whole file with the version you want, then add and commit.',
+    check:() => S.flags.conflictResolved },
+  { id:'remote', title:'Connect to GitHub',
+    body:'A remote is a copy of your repository on another computer, like GitHub. Link one and give it the usual name, origin.',
+    cmds:['git remote add origin https://github.com/YOUR-NAME/my-project.git'], hint:'Use git remote -v to check the link.',
+    check:() => !!S.remote },
+  { id:'push', title:'Push your work',
+    body:'Pushing uploads your commits. The -u flag remembers the link so later you can just type git push.',
+    cmds:['git push -u origin main'], hint:'On the map, a dashed origin/main tag shows what GitHub has.',
+    check:() => !!S.remoteBranches.main }
+];
+const hintShown = {};
+function evaluateMissions(){
+  MISSIONS.forEach(m => { if (!done.has(m.id) && m.check()){ done.add(m.id); out('Mission complete: ' + m.title, 'win'); } });
+  renderMissions();
+}
+function renderMissions(){
+  const ol = $('#track'); ol.innerHTML = '';
+  const cur = MISSIONS.find(m => !done.has(m.id));
+  MISSIONS.forEach(m => {
+    const li = document.createElement('li');
+    li.className = done.has(m.id) ? 'done' : (m === cur ? 'current' : 'todo');
+    const stop = document.createElement('span'); stop.className = 'stop'; stop.setAttribute('aria-hidden', 'true'); li.appendChild(stop);
+    const h = document.createElement('h3'); h.textContent = m.title;
+    const st = document.createElement('span'); st.className = 'sr'; st.textContent = done.has(m.id) ? ' (done)' : (m === cur ? ' (current mission)' : ' (up next)');
+    h.appendChild(st); li.appendChild(h);
+    if (m === cur){
+      const box = document.createElement('div'); box.className = 'mission-body';
+      const p = document.createElement('p'); p.textContent = m.body; box.appendChild(p);
+      const ul = document.createElement('ul'); ul.className = 'cmds';
+      m.cmds.forEach(c => {
+        const row = document.createElement('li');
+        const code = document.createElement('code'); code.textContent = c;
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'btn small'; b.textContent = 'Type it';
+        b.setAttribute('aria-label', 'Type ' + c + ' into the terminal');
+        b.addEventListener('click', () => { cmdInput.value = c; cmdInput.focus(); });
+        row.appendChild(code); row.appendChild(b); ul.appendChild(row);
+      });
+      box.appendChild(ul);
+      const hb = document.createElement('button'); hb.type = 'button'; hb.className = 'btn small';
+      hb.textContent = hintShown[m.id] ? 'Hide hint' : 'Show hint'; hb.setAttribute('aria-expanded', hintShown[m.id] ? 'true' : 'false');
+      hb.addEventListener('click', () => { hintShown[m.id] = !hintShown[m.id]; renderMissions(); });
+      box.appendChild(hb);
+      if (hintShown[m.id]){ const hp = document.createElement('p'); hp.className = 'hint'; hp.textContent = m.hint; box.appendChild(hp); }
+      li.appendChild(box);
+    }
+    ol.appendChild(li);
+  });
+  const fin = $('#finish');
+  if (!cur){
+    fin.innerHTML = '<div class="finish"><h3>You finished every mission</h3><p>Now do it for real. The same commands work on your own computer.</p><ul>' +
+      '<li>Install Git, then run <code>git init</code> in any project folder.</li>' +
+      '<li>Create a repository on GitHub and push to it.</li>' +
+      '<li>Open an issue, then fix it in a pull request. That part only works on GitHub.</li></ul></div>';
+  } else fin.innerHTML = '';
+}
+
+/* ---------- areas + map ---------- */
+function fillList(ul, items, emptyText){
+  ul.innerHTML = '';
+  if (!items.length){ const li = document.createElement('li'); li.className = 'none'; li.textContent = emptyText; ul.appendChild(li); return; }
+  items.forEach(([name, badge, cls]) => {
+    const li = document.createElement('li');
+    const n = document.createElement('span'); n.textContent = name; li.appendChild(n);
+    if (badge){ const b = document.createElement('span'); b.className = 'b ' + cls; b.textContent = badge; li.appendChild(b); }
+    ul.appendChild(li);
+  });
+}
+function renderAreas(){
+  const si = statusInfo(), H = headTree(), conf = new Set(S.conflicts);
+  const untracked = new Set(si.untracked), uns = {}; si.unstaged.forEach(x => uns[x.f] = x.kind);
+  const names = [...new Set([...Object.keys(S.files), ...Object.keys(S.index)])].sort();
+  fillList($('#area-work'), names.map(f => {
+    if (conf.has(f)) return [f, 'needs fixing', 'conf'];
+    if (untracked.has(f)) return [f, 'not tracked', 'new'];
+    if (uns[f] === 'modified') return [f, 'changed', 'mod'];
+    if (uns[f] === 'deleted') return [f, 'deleted', 'del'];
+    return [f, '', ''];
+  }), 'Empty. Make a file with echo "hi" > hello.txt');
+  const cls = {'new file':['new','new'], 'modified':['changed','mod'], 'deleted':['deleted','del']};
+  fillList($('#area-stage'), si.staged.map(x => [x.f, cls[x.kind][0], cls[x.kind][1]]), S.repo ? 'Nothing staged. Use git add.' : 'Run git init to start.');
+  $('#saved-title').textContent = S.repo && headId() ? 'Saved on ' + S.head : 'Saved snapshot';
+  fillList($('#area-saved'), Object.keys(H).sort().map(f => [f, '', '']), 'No commits yet.');
+}
+function renderGraph(){
+  const host = $('#map'), ids = S.order;
+  if (!ids.length){
+    host.innerHTML = '<p class="empty">No commits yet. When you save your first snapshot with <code>git commit</code>, the first station appears here.</p>';
+    prevCount = 0; return;
+  }
+  const DX = 96, X0 = 56, nLanes = Math.max(S.lanes.length, 1);
+  const laneOf = id => Math.max(S.lanes.indexOf(S.commits[id].branch), 0);
+  const col = l => LANE_COLORS[l % LANE_COLORS.length];
+  const xOf = {}; ids.forEach((id, i) => xOf[id] = X0 + i * DX);
+
+  const labels = {}, add = (id, l) => { (labels[id] = labels[id] || []).push(l); };
+  Object.keys(S.branches).sort((a, b) => ((b === S.head) - (a === S.head)) || a.localeCompare(b))
+    .forEach(b => add(S.branches[b], {text: b === S.head ? 'HEAD → ' + b : b, kind: b === S.head ? 'head' : 'branch'}));
+  if (S.remote) Object.keys(S.remoteBranches).sort().forEach(b => add(S.remoteBranches[b], {text: S.remote.name + '/' + b, kind:'remote'}));
+
+  const laneLevels = Array.from({length:nLanes}, () => []), placed = [];
+  ids.forEach(id => (labels[id] || []).forEach(l => {
+    const w = Math.ceil(l.text.length * 6.8 + 18), x0 = xOf[id] - 14, lane = laneOf(id), L = laneLevels[lane];
+    let lvl = L.findIndex(end => end + 6 <= x0); if (lvl < 0){ lvl = L.length; L.push(0); }
+    L[lvl] = x0 + w; placed.push({...l, id, lvl, x:x0, w, lane});
+  }));
+  const yOf = [];
+  for (let l = 0; l < nLanes; l++) yOf[l] = l === 0 ? 18 + Math.max(laneLevels[0].length, 1) * 24 : yOf[l-1] + 46 + Math.max(laneLevels[l].length, 1) * 24;
+  const height = yOf[nLanes - 1] + 50;
+  const width = Math.max(X0 + (ids.length - 1) * DX + 70, ...placed.map(p => p.x + p.w + 20));
+
+  let paths = '', nodes = '', texts = '', tags = '';
+  ids.forEach(id => {
+    const c = S.commits[id], cx = xOf[id], cy = yOf[laneOf(id)];
+    c.parents.forEach((pid, pi) => {
+      const px = xOf[pid], py = yOf[laneOf(pid)], dy = Math.abs(cy - py), dx = cx - px;
+      let d, color;
+      if (py === cy){ d = `M${px} ${py}H${cx}`; color = col(laneOf(id)); }
+      else if (pi === 0){ d = dx >= dy ? `M${px} ${py}L${px + dy} ${cy}H${cx}` : `M${px} ${py}L${cx} ${cy}`; color = col(laneOf(id)); }
+      else { d = dx >= dy ? `M${px} ${py}H${cx - dy}L${cx} ${cy}` : `M${px} ${py}L${cx} ${cy}`; color = col(laneOf(pid)); }
+      paths += `<path d="${d}" stroke="${color}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+    });
+  });
+  ids.forEach((id, i) => {
+    const c = S.commits[id], l = laneOf(id), color = col(l), x = xOf[id], y = yOf[l], merge = c.parents.length > 1;
+    nodes += `<g class="${i >= prevCount ? 'fresh' : ''}" transform="translate(${x} ${y})"><title>${esc(id + ': ' + c.msg)}</title><circle r="10" fill="${merge ? color : '#fff'}" stroke="${color}" stroke-width="5"/></g>`;
+    const m = c.msg.length > 14 ? c.msg.slice(0, 13) + '…' : c.msg;
+    texts += `<text class="msg" x="${x}" y="${y + 30}" text-anchor="middle">${esc(m)}</text>`;
+  });
+  placed.forEach(p => {
+    const y = yOf[p.lane] - 36 - p.lvl * 24, color = col(p.lane);
+    const fill = p.kind === 'head' ? '#16213A' : '#fff', stroke = p.kind === 'remote' ? '#566178' : (p.kind === 'head' ? '#16213A' : color);
+    const txt = p.kind === 'head' ? '#fff' : (p.kind === 'remote' ? '#566178' : '#16213A');
+    tags += `<g transform="translate(${p.x} ${y})"><rect width="${p.w}" height="20" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="2"${p.kind === 'remote' ? ' stroke-dasharray="4 3"' : ''}/><text class="lbl" x="9" y="14" fill="${txt}">${esc(p.text)}</text></g>`;
+  });
+  host.innerHTML = `<svg role="img" aria-label="${esc('Commit map with ' + ids.length + ' commit' + (ids.length === 1 ? '' : 's') + ' on ' + nLanes + ' line' + (nLanes === 1 ? '' : 's') + '. You are on ' + S.head + '.')}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${paths}${nodes}${texts}${tags}</svg>`;
+  prevCount = ids.length;
+  host.scrollLeft = host.scrollWidth;
+}
+function renderAll(){
+  $('#prompt').textContent = promptText();
+  renderAreas(); renderGraph();
+}
+
+/* ---------- run loop ---------- */
+const cmdInput = $('#cmd');
+const hist = []; let hIdx = 0;
+function run(raw){
+  echoPrompt(raw);
+  const line = raw.trim();
+  if (line){
+    hist.push(line); hIdx = hist.length;
+    try { dispatch(tokenize(line)); } catch (e){ out('The simulator hit a bug: ' + e.message + '. Please report it on GitHub.', 'err'); }
+  }
+  renderAll(); evaluateMissions();
+  termEl.scrollTop = termEl.scrollHeight;
+}
+cmdInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter'){ const v = cmdInput.value; cmdInput.value = ''; run(v); }
+  else if (e.key === 'ArrowUp'){ e.preventDefault(); if (hist.length){ hIdx = Math.max(0, hIdx - 1); cmdInput.value = hist[hIdx] || ''; } }
+  else if (e.key === 'ArrowDown'){ e.preventDefault(); hIdx = Math.min(hist.length, hIdx + 1); cmdInput.value = hist[hIdx] || ''; }
+  else if (e.key === 'l' && e.ctrlKey){ e.preventDefault(); termEl.innerHTML = ''; }
+});
+termEl.addEventListener('click', () => { if (!getSelection().toString()) cmdInput.focus(); });
+function start(){
+  S = fresh(); seq = 0; done = new Set(); prevCount = 0;
+  Object.keys(hintShown).forEach(k => delete hintShown[k]);
+  termEl.innerHTML = ''; welcome(); renderAll(); renderMissions();
+}
+$('#reset').addEventListener('click', () => { start(); cmdInput.focus(); });
+start();
+})();
+</script>
+</body>
+</html>
